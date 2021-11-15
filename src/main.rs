@@ -1,4 +1,7 @@
 #![allow(non_upper_case_globals)]
+
+mod shader;
+
 extern crate glfw;
 
 use self::glfw::{Action, Context, Key};
@@ -7,7 +10,8 @@ extern crate gl;
 
 use self::gl::types::*;
 
-use std::ffi::CString;
+use crate::shader::Shader;
+use std::ffi::{CStr, CString};
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
@@ -20,24 +24,22 @@ const SCR_HEIGHT: u32 = 600;
 const vertexShaderSource: &str = r#"
     #version 330 core
     layout (location = 0) in vec3 aPos;
+    layout (location = 1) in vec3 aColor;
+    
+    out vec3 ourColor;
+    
     void main() {
-       gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+       gl_Position = vec4(aPos, 1.0);
+       ourColor = aColor;
     }
 "#;
 
 const fragmentShaderSource: &str = r#"
     #version 330 core
     out vec4 FragColor;
+    in vec3 ourColor;
     void main() {
-       FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
-    }
-"#;
-
-const yellowfragmentShaderSource: &str = r#"
-    #version 330 core
-    out vec4 FragColor;
-    void main() {
-       FragColor = vec4(1.0f, 1.0f, 0.0f, 1.0f);
+       FragColor = vec4(ourColor, 1.0);
     }
 "#;
 
@@ -66,139 +68,31 @@ pub fn main() {
 
     gl::load_with(|symbol| window.get_proc_address(symbol) as *const _);
 
-    let (shaderProgram, shaderProgram2, mut VAOs, mut VBOs) = unsafe {
+    let (shaderProgram, VAO) = unsafe {
         // build and compile our shader program
         // ------------------------------------
         // vertex shader
-        let vertexShader = gl::CreateShader(gl::VERTEX_SHADER);
-        let c_str_vert = CString::new(vertexShaderSource.as_bytes()).unwrap();
-        gl::ShaderSource(vertexShader, 1, &c_str_vert.as_ptr(), ptr::null());
-        gl::CompileShader(vertexShader);
+        let shaderProgram = Shader::new("src/shaders/base.vs", "src/shaders/base.fs");
 
-        // check for shader compile errors
-        let mut success = gl::FALSE as GLint;
-        let mut infoLog = Vec::with_capacity(512);
-        infoLog.set_len(512 - 1); // subtract 1 to skip the trailing null character
-        gl::GetShaderiv(vertexShader, gl::COMPILE_STATUS, &mut success);
-        if success != gl::TRUE as GLint {
-            gl::GetShaderInfoLog(
-                vertexShader,
-                512,
-                ptr::null_mut(),
-                infoLog.as_mut_ptr() as *mut GLchar,
-            );
-            println!(
-                "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n{}",
-                str::from_utf8(&infoLog).unwrap()
-            );
-        }
-
-        // fragment shader
-        let fragmentShader = gl::CreateShader(gl::FRAGMENT_SHADER);
-        let c_str_frag = CString::new(fragmentShaderSource.as_bytes()).unwrap();
-        gl::ShaderSource(fragmentShader, 1, &c_str_frag.as_ptr(), ptr::null());
-        gl::CompileShader(fragmentShader);
-        // check for shader compile errors
-        gl::GetShaderiv(fragmentShader, gl::COMPILE_STATUS, &mut success);
-        if success != gl::TRUE as GLint {
-            gl::GetShaderInfoLog(
-                fragmentShader,
-                512,
-                ptr::null_mut(),
-                infoLog.as_mut_ptr() as *mut GLchar,
-            );
-            println!(
-                "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n{}",
-                str::from_utf8(&infoLog).unwrap()
-            );
-        }
-
-        // fragment shader2
-        let fragmentShader2 = gl::CreateShader(gl::FRAGMENT_SHADER);
-        let c_str_frag = CString::new(yellowfragmentShaderSource.as_bytes()).unwrap();
-        gl::ShaderSource(fragmentShader2, 1, &c_str_frag.as_ptr(), ptr::null());
-        gl::CompileShader(fragmentShader2);
-        // check for shader compile errors
-        gl::GetShaderiv(fragmentShader2, gl::COMPILE_STATUS, &mut success);
-        if success != gl::TRUE as GLint {
-            gl::GetShaderInfoLog(
-                fragmentShader2,
-                512,
-                ptr::null_mut(),
-                infoLog.as_mut_ptr() as *mut GLchar,
-            );
-            println!(
-                "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n{}",
-                str::from_utf8(&infoLog).unwrap()
-            );
-        }
-
-        // link shaders
-        let shaderProgram = gl::CreateProgram();
-        gl::AttachShader(shaderProgram, vertexShader);
-        gl::AttachShader(shaderProgram, fragmentShader);
-        gl::LinkProgram(shaderProgram);
-        // check for linking errors
-        gl::GetProgramiv(shaderProgram, gl::LINK_STATUS, &mut success);
-        if success != gl::TRUE as GLint {
-            gl::GetProgramInfoLog(
-                shaderProgram,
-                512,
-                ptr::null_mut(),
-                infoLog.as_mut_ptr() as *mut GLchar,
-            );
-            println!(
-                "ERROR::SHADER::PROGRAM::COMPILATION_FAILED\n{}",
-                str::from_utf8(&infoLog).unwrap()
-            );
-        }
-
-        // link shader2
-        let shaderProgram2 = gl::CreateProgram();
-        gl::AttachShader(shaderProgram2, vertexShader);
-        gl::AttachShader(shaderProgram2, fragmentShader2);
-        gl::LinkProgram(shaderProgram2);
-        // check for linking errors
-        gl::GetProgramiv(shaderProgram2, gl::LINK_STATUS, &mut success);
-        if success != gl::TRUE as GLint {
-            gl::GetProgramInfoLog(
-                shaderProgram2,
-                512,
-                ptr::null_mut(),
-                infoLog.as_mut_ptr() as *mut GLchar,
-            );
-            println!(
-                "ERROR::SHADER::PROGRAM::COMPILATION_FAILED\n{}",
-                str::from_utf8(&infoLog).unwrap()
-            );
-        }
-
-        gl::DeleteShader(vertexShader);
-        gl::DeleteShader(fragmentShader);
-        gl::DeleteShader(fragmentShader2);
+        // gl::DeleteShader(vertexShader);
+        // gl::DeleteShader(fragmentShader);
 
         // set up vertex data (and buffer(s)) and configure vertex attributes
         // ------------------------------------------------------------------
         // HINT: type annotation is crucial since default for float literals is f64
-        let vertice1: [f32; 9] = [
+        let vertice1: [f32; 18] = [
             // first triangle
-            -0.9, -0.5, 0.0, // left
-            -0.0, -0.5, 0.0, // right
-            -0.45, 0.5, 0.0, // top
-        ];
-        let vertice2: [f32; 9] = [
-            // second triangle
-            0.0, -0.5, 0.0, // left
-            0.9, -0.5, 0.0, // right
-            0.45, 0.5, 0.0, // top
+            -0.5, -0.5, 0.0, 1.0, 0.0, 0.0, // left
+            0.5, -0.5, 0.0, 0.0, 1.0, 0.0, // right
+            0.0, 0.5, 0.0, 0.0, 0.0, 1.0, // top
         ];
 
-        let (mut VBOs, mut VAOs) = ([0, 0], [0, 0]);
-        gl::GenVertexArrays(2, VAOs.as_mut_ptr());
-        gl::GenBuffers(2, VBOs.as_mut_ptr()); // Memory Allocate
-                                              // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
-        gl::BindVertexArray(VAOs[0]);
-        gl::BindBuffer(gl::ARRAY_BUFFER, VBOs[0]);
+        let (mut VBO, mut VAO) = (0, 0);
+        gl::GenVertexArrays(1, &mut VAO);
+        gl::GenBuffers(1, &mut VBO); // Memory Allocate
+                                     // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
+        gl::BindVertexArray(VAO);
+        gl::BindBuffer(gl::ARRAY_BUFFER, VBO);
 
         gl::BufferData(
             gl::ARRAY_BUFFER,
@@ -207,36 +101,20 @@ pub fn main() {
             gl::STATIC_DRAW,
         );
 
+        let stride = 6 * mem::size_of::<GLfloat>() as GLsizei;
+
+        gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, stride, ptr::null());
+        gl::EnableVertexAttribArray(0);
+
         gl::VertexAttribPointer(
-            0,
+            1,
             3,
             gl::FLOAT,
             gl::FALSE,
-            3 * mem::size_of::<GLfloat>() as GLsizei,
-            ptr::null(),
+            stride,
+            (3 * mem::size_of::<GLfloat>()) as *const c_void,
         );
-        gl::EnableVertexAttribArray(0);
-
-        gl::BindVertexArray(VAOs[1]);
-        gl::BindBuffer(gl::ARRAY_BUFFER, VBOs[1]);
-
-        gl::BufferData(
-            gl::ARRAY_BUFFER,
-            (vertice2.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
-            &vertice2[0] as *const f32 as *const c_void,
-            gl::STATIC_DRAW,
-        );
-
-        gl::VertexAttribPointer(
-            0,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            3 * mem::size_of::<GLfloat>() as GLsizei,
-            ptr::null(),
-        );
-        gl::EnableVertexAttribArray(0);
-
+        gl::EnableVertexAttribArray(1);
         // note that this is allowed, the call to gl::VertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
         // gl::BindBuffer(gl::ARRAY_BUFFER, 0);
 
@@ -246,7 +124,7 @@ pub fn main() {
         // uncomment this call to draw in wireframe polygons.
         // gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
 
-        (shaderProgram, shaderProgram2, VAOs, VBOs)
+        (shaderProgram, VAO)
     };
 
     // render loop
@@ -258,21 +136,21 @@ pub fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT);
 
             // draw our first triangle
-            gl::UseProgram(shaderProgram);
-            gl::BindVertexArray(VAOs[0]); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-            gl::DrawArrays(gl::TRIANGLES, 0, 3);
-            gl::UseProgram(shaderProgram2);
-            gl::BindVertexArray(VAOs[1]); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
+            // gl::UseProgram(shaderProgram);
+
+            // let timeValue = glfw.get_time() as f32;
+            // let greenValue = timeValue.sin() / 2.0 + 0.5;
+            // let ourColor = CString::new("ourColor").unwrap();
+            // let vertextColorLocation = gl::GetUniformLocation(shaderProgram, ourColor.as_ptr());
+            // gl::Uniform4f(vertextColorLocation, 0.0, greenValue, 0.0, 1.0);
+            shaderProgram.useProgram();
+            gl::BindVertexArray(VAO);
             gl::DrawArrays(gl::TRIANGLES, 0, 3);
             // gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null());
         }
 
         window.swap_buffers();
         glfw.poll_events();
-    }
-    unsafe {
-        gl::DeleteVertexArrays(2, VAOs.as_mut_ptr());
-        gl::DeleteBuffers(2, VBOs.as_mut_ptr());
     }
 }
 
