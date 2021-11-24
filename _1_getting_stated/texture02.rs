@@ -6,7 +6,6 @@ mod shader;
 extern crate glfw;
 
 use self::glfw::{Action, Context, Key};
-use std::detect::__is_feature_detected::sha;
 
 extern crate gl;
 extern crate image;
@@ -23,9 +22,6 @@ use std::str;
 use std::sync::mpsc::Receiver;
 
 use image::{DynamicImage, GenericImage, GenericImageView};
-
-use cgmath::prelude::*;
-use cgmath::{perspective, vec3, Deg, Matrix4};
 
 const SCR_WIDTH: u32 = 800;
 const SCR_HEIGHT: u32 = 600;
@@ -59,17 +55,17 @@ pub fn main() {
         // build and compile our shader program
         // ------------------------------------
         // vertex shader
-        let shader = Shader::new("src/shaders/coordinate_1.vs", "src/shaders/coordinate_1.fs");
+        let shader = Shader::new("src/shaders/texture02.vs", "src/shaders/texture02.fs");
 
         // set up vertex data (and buffer(s)) and configure vertex attributes
         // ------------------------------------------------------------------
         // HINT: type annotation is crucial since default for float literals is f64
-        let vertices: [f32; 20] = [
-            // positions        // texture coords
-            0.5, 0.5, 0.0, 1.0, 1.0, // top right
-            0.5, -0.5, 0.0, 1.0, 0.0, // bottom right
-            -0.5, -0.5, 0.0, 0.0, 0.0, // bottom left
-            -0.5, 0.5, 0.0, 0.0, 1.0, // top left
+        let vertices: [f32; 32] = [
+            // positions       // colors        // texture coords
+            0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 2.0, 2.0, // top right
+            0.5, -0.5, 0.0, 0.0, 1.0, 0.0, 2.0, 0.0, // bottom right
+            -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
+            -0.5, 0.5, 0.0, 1.0, 1.0, 0.0, 0.0, 2.0, // top left
         ];
         let indices = [0, 1, 3, 1, 2, 3];
 
@@ -96,20 +92,30 @@ pub fn main() {
             gl::STATIC_DRAW,
         );
 
-        let stride = 5 * mem::size_of::<GLfloat>() as GLsizei;
+        let stride = 8 * mem::size_of::<GLfloat>() as GLsizei;
 
         gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, stride, ptr::null());
         gl::EnableVertexAttribArray(0);
 
         gl::VertexAttribPointer(
             1,
-            2,
+            3,
             gl::FLOAT,
             gl::FALSE,
             stride,
             (3 * mem::size_of::<GLfloat>()) as *const c_void,
         );
         gl::EnableVertexAttribArray(1);
+
+        gl::VertexAttribPointer(
+            2,
+            2,
+            gl::FLOAT,
+            gl::FALSE,
+            stride,
+            (6 * mem::size_of::<GLfloat>()) as *const c_void,
+        );
+        gl::EnableVertexAttribArray(2);
 
         // load and create a texture
         let (mut texture, mut texture2) = (0, 0);
@@ -161,7 +167,10 @@ pub fn main() {
         );
         gl::GenerateMipmap(gl::TEXTURE_2D);
         shader.useProgram();
-        shader.setInt(c_str!("texture1"), 0);
+        gl::Uniform1i(
+            gl::GetUniformLocation(shader.ID, c_str!("texture1").as_ptr()),
+            0,
+        );
         shader.setInt(c_str!("texture2"), 1);
         // gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
 
@@ -182,29 +191,14 @@ pub fn main() {
             gl::ActiveTexture(gl::TEXTURE1);
             gl::BindTexture(gl::TEXTURE_2D, texture2);
 
-            // let timeValue = glfw.get_time() as f32;
-            // let visibleOffset = timeValue.sin() / 2.0;
-            // let mut transform: Matrix4<f32> = Matrix4::identity();
-            // let time_cos = (glfw.get_time().cos() / 2.0) as f32;
-            // let time_sin = (glfw.get_time().sin() / 2.0) as f32;
-            // transform =
-            //     transform * Matrix4::<f32>::from_translation(vec3(time_sin, time_cos, time_sin));
-            // transform = transform * Matrix4::<f32>::from_angle_z(Rad(glfw.get_time() as f32));
+            let timeValue = glfw.get_time() as f32;
+            let visibleOffset = timeValue.sin() / 2.0;
 
             shader.useProgram();
-
-            let model: Matrix4<f32> = Matrix4::from_angle_x(Deg(-55.));
-            let view: Matrix4<f32> = Matrix4::from_translation(vec3(0., 0., -2.));
-            // create orthographic
-            let projection: Matrix4<f32> =
-                perspective(Deg(45.0), SCR_WIDTH as f32 / SCR_HEIGHT as f32, 0.1, 100.0);
-            let modelLoc = gl::GetUniformLocation(shader.ID, c_str!("model").as_ptr());
-            let viewLoc = gl::GetUniformLocation(shader.ID, c_str!("view").as_ptr());
-
-            gl::UniformMatrix4fv(modelLoc, 1, gl::FALSE, model.as_ptr());
-            gl::UniformMatrix4fv(viewLoc, 1, gl::FALSE, &view[0][0]);
-
-            shader.setMat4(c_str!("projection"), &projection);
+            gl::Uniform1f(
+                gl::GetUniformLocation(shader.ID, c_str!("visibleOffset").as_ptr()),
+                visibleOffset,
+            );
 
             gl::BindVertexArray(VAO);
             gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, ptr::null());

@@ -6,6 +6,7 @@ use std::io::Read;
 use std::ptr;
 use std::str;
 
+use cgmath::{Matrix, Matrix4};
 use gl;
 use gl::types::*;
 
@@ -102,14 +103,14 @@ impl Shader {
     //     gl::Uniform3f(gl::GetUniformLocation(self.ID, name.as_ptr()), x, y, z);
     // }
     // /// ------------------------------------------------------------------------
-    // pub unsafe fn setMat4(&self, name: &CStr, mat: &Matrix4<f32>) {
-    //     gl::UniformMatrix4fv(
-    //         gl::GetUniformLocation(self.ID, name.as_ptr()),
-    //         1,
-    //         gl::FALSE,
-    //         mat.as_ptr(),
-    //     );
-    // }
+    pub unsafe fn setMat4(&self, name: &CStr, mat: &Matrix4<f32>) {
+        gl::UniformMatrix4fv(
+            gl::GetUniformLocation(self.ID, name.as_ptr()),
+            1,
+            gl::FALSE,
+            mat.as_ptr(),
+        );
+    }
     unsafe fn checkCompileErrors(&self, shader: u32, type_: ShaderType) {
         let mut success = gl::FALSE as GLint;
         let mut infoLog = Vec::with_capacity(1024);
